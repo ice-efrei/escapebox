@@ -18,7 +18,7 @@ Keypad keypad = Keypad(makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_N
 
 char listenKeypad()
 {
-    char key = keypad.getKey();
+    char key = keypad.waitForKey();
     if (key)
     {
         Serial.println(key);
@@ -63,6 +63,15 @@ char getChar()
         }
     } while (value == '\0');
     return value;
+}
+char getKeyIfPressed()
+{
+    char key = keypad.getKey();
+    if (key)
+    {
+        Serial.println(key);
+    }
+    return key;
 }
 
 // LCD Pins
@@ -120,6 +129,42 @@ void loadingBarWithTitle(String title)
 // EscapeBox
 #define CODE_SIZE 6
 
+String millisToString(unsigned long millis)
+{
+    int milliseconds = millis % 1000;
+    int seconds = millis / 1000;
+    int minutes = seconds / 60;
+    int hours = minutes / 60;
+
+    String time = "";
+    if (hours < 10)
+    {
+        time += "0";
+    }
+    time += String(hours) + ":";
+    if (minutes < 10)
+    {
+        time += "0";
+    }
+    time += String(minutes) + ":";
+    if (seconds < 10)
+    {
+        time += "0";
+    }
+    time += String(seconds);
+    if (milliseconds < 100)
+    {
+        time += "0";
+    }
+    if (milliseconds < 10)
+    {
+        time += "0";
+    }
+    time += String(milliseconds);
+
+    return time;
+}
+
 // EscapeBox gameplays
 const int gameplaysCount = 1;
 String gameplays[] = {"Numpad"};
@@ -168,6 +213,11 @@ private:
     int _timer; // time in milliseconds until the bomb explodes
     char _defuse_code[CODE_SIZE];
 
+    unsigned long _previous_time;
+
+    int _code_current_index = 0;
+    char _defusing_code[CODE_SIZE];
+
     void loadState(int state)
     {
         _state = state;
@@ -215,6 +265,26 @@ private:
         }
 
         _timer = ((time[0] * 10 + time[1]) * 60 + (time[2] * 10 + time[3])) * 1000;
+    }
+    void updateGameplay()
+    {
+        unsigned long current_time = millis();
+
+        if (current_time - _previous_time < 10)
+        {
+            _timer -= current_time - _previous_time;
+        }
+
+        switch (_gameplayIndex)
+        {
+        case 0:
+            updateNumpadGameplay();
+            break;
+        default:
+            break;
+        }
+
+        _previous_time = current_time;
     }
 
     /**
@@ -284,6 +354,7 @@ private:
         for (int i = 0; i < CODE_SIZE; i++)
         {
             _defuse_code[i] = '*';
+            _defusing_code[i] = '*';
         }
 
         printCentered("Defuse the bomb", 0);
@@ -312,6 +383,88 @@ private:
         printCentered("Code entered", 3);
         delay(2000);
         cleanLCD();
+    }
+
+    /**
+     * Gameplay : Numpad
+     * State : 3
+     * Gameplay index : 0
+     */
+    void updateNumpadGameplay()
+    {
+        if (_timer == 0)
+            return;
+
+        if (_timer <= 0)
+        {
+            loadState(4);
+            return;
+        }
+
+        String timeLeft = millisToString(_timer);
+        printTwoColumns("Time left", timeLeft, 0);
+
+        printCentered(String(_defuse_code[0]) + String(_defuse_code[1]) + String(_defuse_code[2]) + String(_defuse_code[3]) + String(_defuse_code[4]) + String(_defuse_code[5]), 2);
+
+        const char pressed = getKeyIfPressed();
+
+        if (pressed != '\0')
+        {
+            for (int i = 0; i < CODE_SIZE - 1; i++)
+            {
+                _defusing_code[i] = _defusing_code[i + 1];
+            }
+            _defusing_code[CODE_SIZE - 1] = pressed;
+            _code_current_index++;
+
+            if (String(_defusing_code) == String(_defuse_code))
+            {
+                loadState(5);
+                return;
+            }
+            else if (_code_current_index >= CODE_SIZE)
+            {
+                for (int i = 0; i < CODE_SIZE; i++)
+                {
+                    _defusing_code[i] = '*';
+                }
+                _code_current_index = 0;
+            }
+        }
+    }
+
+    /**
+     * Bomb Explode
+     * State 4
+     */
+    void gameover()
+    {
+        printCentered("BOOM", 1);
+        printCentered("EXPLODE", 2);
+        printCentered("press any key", 3);
+
+        listenKeypad();
+
+        cleanLCD();
+
+        loadState(1);
+    }
+
+    /**
+     * Bomb Defused
+     * State 5
+     */
+    void defused()
+    {
+        printCentered("Bomb defused", 1);
+
+        printCentered("press any key", 3);
+
+        listenKeypad();
+
+        cleanLCD();
+
+        loadState(1);
     }
 };
 
