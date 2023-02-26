@@ -202,6 +202,10 @@ public:
             displayMainMenu();
             break;
         case 2:
+            initGameplays();
+            break;
+        case 3:
+            updateGameplay();
             break;
         }
     }
@@ -468,15 +472,20 @@ private:
     }
 };
 
+EscapeBoxMachine *ebm;
+
 void setup()
 {
     Serial.begin(9600);
 
     lcd.begin(LCD_COLS, LCD_ROWS);
     printAt("Hello World!", 0, 0);
+
+    ebm = new EscapeBoxMachine();
+    ebm->initialize();
 }
 
 void loop()
 {
-    // nothing happens after setup
+    ebm->update();
 }
